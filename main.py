@@ -1,139 +1,158 @@
-# pylint: disable=missing-module-docstring, missing-function-docstring, missing-class-docstring
+from typing import Optional, List, Dict
+from enum import Enum
+from fastapi import FastAPI, Path, Body, Query, HTTPException
+from pydantic import BaseModel, Field
 import uuid
 
-from typing import Optional, Dict
+app = FastAPI()
 
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, Field
+fake_db = {}
 
 
-# pylint: disable=too-few-public-methods
-class Task(BaseModel):
-    description: Optional[str] = Field(
-        'no description',
-        title='Task description',
-        max_length=1024,
+class TaskIn(BaseModel):
+    name: str = Field(
+        description="Name of the task (user imput)",
     )
-    completed: Optional[bool] = Field(
-        False,
-        title='Shows whether the task was completed',
+    description: str = Field(
+        description="Description of the task (user imput)",
     )
 
-    class Config:
-        schema_extra = {
-            'example': {
-                'description': 'Buy baby diapers',
-                'completed': False,
-            }
-        }
+
+class TaskOut(BaseModel):
+    task_id: uuid.UUID = Field(
+        description="Id of the task (UUID)",
+    )
+    name: str = Field(
+        description="Name of the task",
+    )
+    description: str = Field(
+        description="Description of the task",
+    )
+    status: bool = Field(
+        description="Status of the task (done or not done yet)",
+        example="True, False"
+    )
 
 
-tags_metadata = [
-    {
-        'name': 'task',
-        'description': 'Operations related to tasks.',
-    },
-]
-
-app = FastAPI(
-    title='Task list',
-    description='Task-list project for the **Megadados** course',
-    openapi_tags=tags_metadata,
-)
-
-tasks = {}
+class TaskInUpdate(BaseModel):
+    description: str = Field(
+        description="Description of the task",
+    )
+    status: bool = Field(
+        description="Status of the task (done or not done yet)",
+        example="True, False"
+    )
 
 
-@app.get(
-    '/task',
-    tags=['task'],
-    summary='Reads task list',
-    description='Reads the whole task list.',
-    response_model=Dict[uuid.UUID, Task],
-)
-async def read_tasks(completed: bool = None):
-    if completed is None:
-        return tasks
-    return {
-        uuid_: item
-        for uuid_, item in tasks.items() if item.completed == completed
-    }
+class TaskStatusModel(str, Enum):
+    done = "done"
+    not_done = "not_done"
 
 
-@app.post(
-    '/task',
-    tags=['task'],
-    summary='Creates a new task',
-    description='Creates a new task and returns its UUID.',
-    response_model=uuid.UUID,
-)
-async def create_task(item: Task):
-    uuid_ = uuid.uuid4()
-    tasks[uuid_] = item
-    return uuid_
+@app.get("/check",
+    summary="Check",
+    description="Used to check if the network is running",)
+
+def get_root():
+    return {"Check": "Running"}
 
 
-@app.get(
-    '/task/{uuid_}',
-    tags=['task'],
-    summary='Reads task',
-    description='Reads task from UUID.',
-    response_model=Task,
-)
-async def read_task(uuid_: uuid.UUID):
+@app.post("/tasks",
+    summary="Create Tasks",
+    description="Used to create new tasks",
+    response_description="New task",
+    response_model=TaskOut)
+
+async def create_task(task: TaskIn = Body(...)):
+
+    global fake_db
+    id = uuid.uuid4()
+
+    task_out_db = TaskOut(**task.dict(), status=False, task_id=id)
+    fake_db.update({id: task_out_db})
+
+    return task_out_db
+
+
+@app.get("/tasks_list/", 
+    summary="Read Tasks",
+    description="Used to consult the sistem in order to retrieve tasks on the dictionary",
+    response_description="Dictionary containing all tasks based on the query parameter or returning all the tasks created if no query is sent",
+    response_model=Dict[uuid.UUID, TaskOut])
+
+async def read_task(q: Optional[TaskStatusModel] = Query(
+        None,
+        alias="status",
+        title="Query filter based on status",
+        description="Used to return only the tasks with the status in question or all of then if no status is sent",
+        example="Example: done, not_done")):
+
+    global fake_db
+    q_dict = {}
+
+    if q != None:
+        for task in fake_db.values():
+
+            if task.status and q == TaskStatusModel.done:
+                q_dict.update({task.task_id: task})
+
+            elif not task.status and q == TaskStatusModel.not_done:
+                q_dict.update({task.task_id: task})
+
+        return q_dict
+    else:
+        return fake_db
+
+
+@app.patch("/task_update/{task_id}",
+    summary="Update Tasks",
+    description="Used to update the description and the status of a task on the dictionary",
+    response_description="Dictionary containing the altered task",
+    response_model=TaskOut)
+def update_item(*, task_id: uuid.UUID = Path(
+    ..., 
+    description="The ID of the task to be altered", 
+    example= "Example: 3fa85f64-5717-4562-b3fc-2c963f66afa6"), 
+    task: TaskInUpdate):
+    
+    global fake_db
+
+    if task_id not in fake_db:
+        raise HTTPException(
+            status_code=404,
+            detail='Task not found',
+        )
+
+    task_db = fake_db.get(task_id)
+    update_data = task_db.dict(exclude_unset=True)
+    update_data.update(**task.dict())
+    task_out = TaskOut(**update_data)
+    fake_db.update({task_id: task_out})
+
+    return task_out
+
+
+@app.delete("/task_delete/{task_id}",
+    summary="Delete Tasks",
+    description="Used to delete a task on the dictionary",
+    response_description="Dictionary containing all the remaining tasks",
+    response_model=Dict[uuid.UUID, TaskOut])
+
+def delete_task(*,task_id: uuid.UUID = Path(
+    ..., 
+    description="The ID of the task to be deleted", 
+    example= "Example: 3fa85f64-5717-4562-b3fc-2c963f66afa6")):
+
+    global fake_db
     try:
-        return tasks[uuid_]
+
+        task_db = fake_db.get(task_id)
+        del fake_db[task_id]
+
     except KeyError as exception:
         raise HTTPException(
             status_code=404,
             detail='Task not found',
         ) from exception
 
-
-@app.put(
-    '/task/{uuid_}',
-    tags=['task'],
-    summary='Replaces a task',
-    description='Replaces a task identified by its UUID.',
-)
-async def replace_task(uuid_: uuid.UUID, item: Task):
-    try:
-        tasks[uuid_] = item
-    except KeyError as exception:
-        raise HTTPException(
-            status_code=404,
-            detail='Task not found',
-        ) from exception
-
-
-@app.patch(
-    '/task/{uuid_}',
-    tags=['task'],
-    summary='Alters task',
-    description='Alters a task identified by its UUID',
-)
-async def alter_task(uuid_: uuid.UUID, item: Task):
-    try:
-        update_data = item.dict(exclude_unset=True)
-        tasks[uuid_] = tasks[uuid_].copy(update=update_data)
-    except KeyError as exception:
-        raise HTTPException(
-            status_code=404,
-            detail='Task not found',
-        ) from exception
-
-
-@app.delete(
-    '/task/{uuid_}',
-    tags=['task'],
-    summary='Deletes task',
-    description='Deletes a task identified by its UUID',
-)
-async def remove_task(uuid_: uuid.UUID):
-    try:
-        del tasks[uuid_]
-    except KeyError as exception:
-        raise HTTPException(
-            status_code=404,
-            detail='Task not found',
-        ) from exception
+    return fake_db
