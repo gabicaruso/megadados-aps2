@@ -1,6 +1,6 @@
 from typing import Optional, List, Dict
 from enum import Enum
-from fastapi import FastAPI, Path, Body, Query
+from fastapi import FastAPI, Path, Body, Query, HTTPException
 from pydantic import BaseModel, Field
 import uuid
 
@@ -117,8 +117,14 @@ def update_item(*, task_id: uuid.UUID = Path(
     
     global fake_db
 
+    if task_id not in fake_db:
+        raise HTTPException(
+            status_code=404,
+            detail='Task not found',
+        )
+
     task_db = fake_db.get(task_id)
-    update_data = task_db.dict()
+    update_data = task_db.dict(exclude_unset=True)
     update_data.update(**task.dict())
     task_out = TaskOut(**update_data)
     fake_db.update({task_id: task_out})
@@ -138,7 +144,15 @@ def delete_task(*,task_id: uuid.UUID = Path(
     example= "Example: 3fa85f64-5717-4562-b3fc-2c963f66afa6")):
 
     global fake_db
-    task_db = fake_db.get(task_id)
-    del fake_db[task_id]
+    try:
+
+        task_db = fake_db.get(task_id)
+        del fake_db[task_id]
+
+    except KeyError as exception:
+        raise HTTPException(
+            status_code=404,
+            detail='Task not found',
+        ) from exception
 
     return fake_db

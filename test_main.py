@@ -22,7 +22,7 @@ def test_read_tasks_without_any():
     assert response.json() == {}
 
 
-def test_read_tasks():
+def test_read_tasks_and_delete_then():
     fake_db = [
         {
             "name": "t3",
@@ -41,21 +41,23 @@ def test_read_tasks():
     response_get = {}
     response_done = {}
     response_not_done = {}
+    uuids = []
 
-    def expected_responses(dic,res):
-        dic.update({res['task_id'] :
-        { "task_id" : res['task_id'], 
-        "name" : res['name'] ,
-        "description": res['description'],
-        "status": res['status']}}
-        )
+    def expected_responses(dic, res):
+        dic.update({res['task_id']:
+                    {"task_id": res['task_id'],
+                     "name": res['name'],
+                     "description": res['description'],
+                     "status": res['status']}}
+                   )
 
-    for task in fake_db :
+    for task in fake_db:
         response = client.post(
             '/tasks',
-            json = task
+            json=task
         )
         response = response.json()
+        uuids.append(response['task_id'])
         expected_responses(response_get, response)
         if response['status'] == False:
             expected_responses(response_not_done, response)
@@ -66,13 +68,21 @@ def test_read_tasks():
     assert response.status_code == 200
     assert response.json() == response_get
 
-    response =  client.get('/tasks_list/?status=not_done')
+    response = client.get('/tasks_list/?status=not_done')
     assert response.status_code == 200
     assert response.json() == response_not_done
-  
-    response =  client.get('/tasks_list/?status=done')
+
+    response = client.get('/tasks_list/?status=done')
     assert response.status_code == 200
     assert response.json() == response_done
+
+    for uuid in uuids:
+        response = client.delete(
+            f'/task_delete/{uuid}'
+        )
+        assert response.status_code == 200
+    assert response.json() == {}
+
 
 def test_create_task():
     response = client.post(
@@ -133,15 +143,15 @@ def test_create_task_without_name():
         ]
     }
 
-def test_delete_task() :
+
+def test_delete_task():
     response = client.post(
         '/tasks',
         json={
-            "name": "task 1",
-            "description": "task 1 description"
+            "name": "task 7",
+            "description": "task 7 description"
         }
     )
-
     response = response.json()
     uuid = response["task_id"]
     response = client.delete(
@@ -150,35 +160,140 @@ def test_delete_task() :
     assert response.status_code == 200
 
 
-# def patch_id_not_found():
-#     response = client.post(
-#         '/tasks',
-#         json={
-#             "name": "task 1",
-#             "description": "task 1 description"
-#         }
-#     )
-
-    
-
-# def delete_id_not_found():
-#      response = client.delete(
-#         '/task_delete/a8a76e99-de76-421b-918b-1de772e686d1'
-#     )
-#      response = response.json() 
-#      assert response.status_code == 500
-#      assert response.json() == {'message': 'Internal Server Error'}
-    
+def test_delete_task_wrong_id():
+    wrong_uuid = "5e6bff37-70b3-42bc-a0d0-8c731e12b411"
+    response = client.delete(
+        f'/task_delete/{wrong_uuid}'
+    )
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Task not found"}
 
 
+def test_update_task():
+    response = client.post(
+        '/tasks',
+        json={
+            "name": "task 10",
+            "description": "task 10 description"
+        }
+    )
+    response = response.json()
+    uuid = response["task_id"]
+    response = client.patch(
+        f'/task_update/{uuid}',
+        json={
+            "description": "task 10 description",
+            'status': True
+        }
+    )
+    updated_task = response.json()
+    assert updated_task['description'] == 'task 10 description'
+    assert updated_task['status'] == True
+    assert response.status_code == 200
 
-    
+
+def test_update_task_wrong_id():
+    wrong_uuid = "5e6bff37-70b3-42bc-a0d0-8c731e12b411"
+    response = client.patch(
+        f'/task_update/{wrong_uuid}',
+        json={
+            "description": "task 2 description",
+            "status": "True"
+        }
+    )
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Task not found"}
 
 
+def test_update_task_without_description():
+    response = client.post(
+        '/tasks',
+        json={
+            "name": "task 11",
+            "description": "task 11 description"
+        }
+    )
+    response = response.json()
+    uuid = response["task_id"]
+    response = client.patch(
+        f'/task_update/{uuid}',
+        json={
+            'status': True
+        }
+    )
+    assert response.status_code == 422
+    assert response.json() == {
+        "detail": [
+            {
+                "loc": [
+                    "body",
+                    "description"
+                ],
+                "msg": "field required",
+                "type": "value_error.missing"
+            }
+        ]
+    }
 
 
+def test_update_task_without_status():
+    response = client.post(
+        '/tasks',
+        json={
+            "name": "task 12",
+            "description": "task 12 description"
+        }
+    )
+    response = response.json()
+    uuid = response["task_id"]
+    response = client.patch(
+        f'/task_update/{uuid}',
+        json={
+            "description": "task 12 new description"
+        }
+    )
+    assert response.status_code == 422
+    assert response.json() == {
+        "detail": [
+            {
+                "loc": [
+                    "body",
+                    "status"
+                ],
+                "msg": "field required",
+                "type": "value_error.missing"
+            }
+        ]
+    }
 
 
-
-
-
+def test_update_task_with_wrong_status():
+    response = client.post(
+        '/tasks',
+        json={
+            "name": "task 13",
+            "description": "task 13 description"
+        }
+    )
+    response = response.json()
+    uuid = response["task_id"]
+    response = client.patch(
+        f'/task_update/{uuid}',
+        json={
+            "description": "task 13 new description",
+            'status': "string"
+        }
+    )
+    assert response.status_code == 422
+    assert response.json() == {
+        "detail": [
+            {
+                "loc": [
+                    "body",
+                    "status"
+                ],
+                "msg": "value could not be parsed to a boolean",
+                "type": "type_error.bool"
+            }
+        ]
+    }
