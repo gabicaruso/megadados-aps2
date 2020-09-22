@@ -22,49 +22,57 @@ def test_read_tasks_without_any():
     assert response.json() == {}
 
 
-# def test_read_tasks():
-#     fake_db = {
-#         "24433581-0225-4011-ba36-f65c97d2aa8c": {
-#             "task_id": "24433581-0225-4011-ba36-f65c97d2aa8c",
-#             "name": "t3",
-#             "description": "task3",
-#             "status": False
-#         },
-#         "d47b55fe-109e-41c9-8dee-4288df4fecb6": {
-#             "task_id": "d47b55fe-109e-41c9-8dee-4288df4fecb6",
-#             "name": "t4",
-#             "description": "task4",
-#             "status": False
-#         },
-#         "ca7ca4e5-6158-45ca-9351-6d110db6a178": {
-#             "task_id": "ca7ca4e5-6158-45ca-9351-6d110db6a178",
-#             "name": "t5",
-#             "description": "task5",
-#             "status": True
-#         }
-#     }
-#     response = client.get('/tasks_list/')
-#     assert response.status_code == 200
-#     assert response.json() == {
-#         "24433581-0225-4011-ba36-f65c97d2aa8c": {
-#             "task_id": "24433581-0225-4011-ba36-f65c97d2aa8c",
-#             "name": "t3",
-#             "description": "task3",
-#             "status": False
-#         },
-#         "d47b55fe-109e-41c9-8dee-4288df4fecb6": {
-#             "task_id": "d47b55fe-109e-41c9-8dee-4288df4fecb6",
-#             "name": "t4",
-#             "description": "task4",
-#             "status": False
-#         },
-#         "ca7ca4e5-6158-45ca-9351-6d110db6a178": {
-#             "task_id": "ca7ca4e5-6158-45ca-9351-6d110db6a178",
-#             "name": "t5",
-#             "description": "task5",
-#             "status": True
-#         }
-#     }
+def test_read_tasks():
+    fake_db = [
+        {
+            "name": "t3",
+            "description": "task3",
+
+        },
+        {
+            "name": "t4",
+            "description": "task4",
+        },
+        {
+            "name": "t5",
+            "description": "task5",
+        }
+    ]
+    response_get = {}
+    response_done = {}
+    response_not_done = {}
+
+    def expected_responses(dic,res):
+        dic.update({res['task_id'] :
+        { "task_id" : res['task_id'], 
+        "name" : res['name'] ,
+        "description": res['description'],
+        "status": res['status']}}
+        )
+
+    for task in fake_db :
+        response = client.post(
+            '/tasks',
+            json = task
+        )
+        response = response.json()
+        expected_responses(response_get, response)
+        if response['status'] == False:
+            expected_responses(response_not_done, response)
+        if response['status'] == True:
+            expected_responses(response_done, response)
+
+    response = client.get('/tasks_list/')
+    assert response.status_code == 200
+    assert response.json() == response_get
+
+    response =  client.get('/tasks_list/?status=not_done')
+    assert response.status_code == 200
+    assert response.json() == response_not_done
+  
+    response =  client.get('/tasks_list/?status=done')
+    assert response.status_code == 200
+    assert response.json() == response_done
 
 def test_create_task():
     response = client.post(
@@ -124,3 +132,53 @@ def test_create_task_without_name():
             }
         ]
     }
+
+def test_delete_task() :
+    response = client.post(
+        '/tasks',
+        json={
+            "name": "task 1",
+            "description": "task 1 description"
+        }
+    )
+
+    response = response.json()
+    uuid = response["task_id"]
+    response = client.delete(
+        f'/task_delete/{uuid}'
+    )
+    assert response.status_code == 200
+
+
+# def patch_id_not_found():
+#     response = client.post(
+#         '/tasks',
+#         json={
+#             "name": "task 1",
+#             "description": "task 1 description"
+#         }
+#     )
+
+    
+
+# def delete_id_not_found():
+#      response = client.delete(
+#         '/task_delete/a8a76e99-de76-421b-918b-1de772e686d1'
+#     )
+#      response = response.json() 
+#      assert response.status_code == 500
+#      assert response.json() == {'message': 'Internal Server Error'}
+    
+
+
+
+    
+
+
+
+
+
+
+
+
+
