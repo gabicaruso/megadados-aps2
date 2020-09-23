@@ -14,11 +14,28 @@ def test_check_if_is_running():
     assert response.status_code == 200
     assert response.json() == {'Check': 'Running'}
 
-
+#Checks if the request returns an empty dictionary 
 def test_read_tasks_without_any():
     response = client.get('/task')
     assert response.status_code == 200
     assert response.json() == {}
+    
+#checks if the request with an invalid query returns a 422 code
+#with a 'type_error.enum' message
+def test_get_wrong_enum_value():
+    response = client.get('/task?status=oi')
+    assert response.status_code == 422
+    assert response.json() ==  {
+        'detail': 
+        [
+            {
+            'ctx': {'enum_values': ['done', 'not_done']}, 
+            'loc': ['query', 'status'],
+            'msg': "value is not a valid enumeration member; permitted: 'done', 'not_done'",
+            'type': 'type_error.enum'
+            }
+        ]
+    }
 
 
 def test_read_tasks_and_delete_then():
@@ -50,11 +67,13 @@ def test_read_tasks_and_delete_then():
                      "status": res['status']}}
                    )
 
+    #Insert some tasks and check that all succeeded  
     for task in fake_db:
         response = client.post(
             '/task',
             json=task
         )
+        assert response.status_code == 200
         response = response.json()
         uuids.append(response['task_id'])
         expected_responses(response_get, response)
@@ -63,18 +82,24 @@ def test_read_tasks_and_delete_then():
         if response['status'] == True:
             expected_responses(response_done, response)
 
+    #Checks if the request returns a dictionary containing all tasks
     response = client.get('/task/')
     assert response.status_code == 200
     assert response.json() == response_get
 
+    #Checks if the request returns a dictionary containing
+    # all tasks which the status field is "False" 
     response = client.get('/task?status=not_done')
     assert response.status_code == 200
     assert response.json() == response_not_done
 
+    #Check if the request returns a dictionary containing 
+    #all tasks which the status field is "True" 
     response = client.get('/task?status=done')
     assert response.status_code == 200
     assert response.json() == response_done
 
+    #Delete all tasks and check if the list of tasks is empty
     for uuid in uuids:
         response = client.delete(
             f'/task/{uuid}'
@@ -82,7 +107,7 @@ def test_read_tasks_and_delete_then():
         assert response.status_code == 200
     assert response.json() == {}
 
-
+#Checks if the post request succeded 
 def test_create_task():
     response = client.post(
         '/task',
@@ -98,7 +123,8 @@ def test_create_task():
     assert response['description'] == 'task 1 description'
     assert response['status'] == False
 
-
+#Insert a task with no description and checks if 
+#returns a 422 code with a value_error.missing message
 def test_create_task_without_description():
     response = client.post(
         '/task',
@@ -120,7 +146,8 @@ def test_create_task_without_description():
         ]
     }
 
-
+#Insert a task with no name and checks if 
+#returns a 422 code with a "value_error.missing" message
 def test_create_task_without_name():
     response = client.post(
         '/task',
@@ -142,7 +169,7 @@ def test_create_task_without_name():
         ]
     }
 
-
+#Checks if the delete request succeded 
 def test_delete_task():
     response = client.post(
         '/task',
@@ -158,7 +185,8 @@ def test_delete_task():
     )
     assert response.status_code == 200
 
-
+#Try to delete a task with a non existing uuid as a parameter and 
+#checks if returns a 404 code with a "Task not found" message
 def test_delete_task_wrong_id():
     wrong_uuid = "5e6bff37-70b3-42bc-a0d0-8c731e12b411"
     response = client.delete(
@@ -167,7 +195,7 @@ def test_delete_task_wrong_id():
     assert response.status_code == 404
     assert response.json() == {"detail": "Task not found"}
 
-
+#Checks if a patch request succeded 
 def test_update_task():
     response = client.post(
         '/task',
@@ -190,7 +218,8 @@ def test_update_task():
     assert updated_task['status'] == True
     assert response.status_code == 200
 
-
+#Try to update a task with a non existing uuid as a parameter and 
+#checks if returns a 404 code with a "Task not found" message
 def test_update_task_wrong_id():
     wrong_uuid = "5e6bff37-70b3-42bc-a0d0-8c731e12b411"
     response = client.patch(
@@ -203,7 +232,8 @@ def test_update_task_wrong_id():
     assert response.status_code == 404
     assert response.json() == {"detail": "Task not found"}
 
-
+#Try to update a task without the description parameter and checks if 
+#returns a 422 code with a "value_error.missing" message
 def test_update_task_without_description():
     response = client.post(
         '/task',
@@ -234,7 +264,8 @@ def test_update_task_without_description():
         ]
     }
 
-
+#Try to update a task without the status parameter and checks if 
+#returns a 422 code with a "value_error.missing" message
 def test_update_task_without_status():
     response = client.post(
         '/task',
@@ -265,7 +296,8 @@ def test_update_task_without_status():
         ]
     }
 
-
+#Try to update a task using a string as a status parameter and
+#checks if returns a 422 code with a "type_error.bool" message
 def test_update_task_with_wrong_status():
     response = client.post(
         '/task',
