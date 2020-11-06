@@ -18,7 +18,7 @@ class DBSession:
         self.connection = connection
 
     def read_tasks(self, completed: bool = None):
-        query = 'SELECT BIN_TO_UUID(uuid), description, completed FROM tasks'
+        query = 'SELECT BIN_TO_UUID(uuid), description, completed, BIN_TO_UUID(user_id) FROM tasks'
         if completed is not None:
             query += ' WHERE completed = '
             if completed:
@@ -29,13 +29,15 @@ class DBSession:
         with self.connection.cursor() as cursor:
             cursor.execute(query)
             db_results = cursor.fetchall()
+            print(db_results)
 
         return {
             uuid_: Task(
                 description=field_description,
                 completed=bool(field_completed),
+                user_id = field_user_id
             )
-            for uuid_, field_description, field_completed in db_results
+            for uuid_, field_description, field_completed, field_user_id in db_results
         }
 
     def create_task(self, item: Task):
@@ -43,8 +45,8 @@ class DBSession:
 
         with self.connection.cursor() as cursor:
             cursor.execute(
-                'INSERT INTO tasks VALUES (UUID_TO_BIN(%s), %s, %s)',
-                (str(uuid_), item.description, item.completed),
+                'INSERT INTO tasks VALUES (UUID_TO_BIN(%s), %s, %s, UUID_TO_BIN(%s))',
+                (str(uuid_), item.description, item.completed, item.user_id),
             )
         self.connection.commit()
 
@@ -57,7 +59,7 @@ class DBSession:
         with self.connection.cursor() as cursor:
             cursor.execute(
                 '''
-                SELECT description, completed
+                SELECT description, completed, BIN_TO_UUID(user_id)
                 FROM tasks
                 WHERE uuid = UUID_TO_BIN(%s)
                 ''',
@@ -65,20 +67,22 @@ class DBSession:
             )
             result = cursor.fetchone()
 
-        return Task(description=result[0], completed=bool(result[1]))
+        return Task(description=result[0], completed=bool(result[1]), user_id = result[2])
 
     def replace_task(self, uuid_, item):
+        print("entrou replace task")
         if not self.__task_exists(uuid_):
             raise KeyError()
 
         with self.connection.cursor() as cursor:
             cursor.execute(
                 '''
-                UPDATE tasks SET description=%s, completed=%s
+                UPDATE tasks SET description=%s, completed=%s, user_id = UUID_TO_BIN(%s)
                 WHERE uuid=UUID_TO_BIN(%s)
                 ''',
-                (item.description, item.completed, str(uuid_)),
+                (item.description, item.completed, item.user_id, str(uuid_)),
             )
+
         self.connection.commit()
 
     def remove_task(self, uuid_):
@@ -111,7 +115,7 @@ class DBSession:
             found = bool(results[0])
 
         return found
-        
+
     def read_users(self):
         query = 'SELECT BIN_TO_UUID(uuid), username FROM users'
         with self.connection.cursor() as cursor:
@@ -198,8 +202,7 @@ class DBSession:
             results = cursor.fetchone()
             found = bool(results[0])
 
-        return found    
-
+        return found        
 
 @lru_cache
 def get_credentials(
@@ -224,241 +227,3 @@ def get_db(credentials: dict = Depends(get_credentials)):
         yield DBSession(connection)
     finally:
         connection.close()
-
-
-            
-
-
-
-# class DBSession:
-#     def __init__(self, connection: conn.MySQLConnection):
-#         self.connection = connection
-
-#     def read_tasks(self, completed: bool = None):
-#         # query = 'SELECT BIN_TO_UUID(uuid), description, completed, user_id FROM tasks'
-#         query = 'SELECT BIN_TO_UUID(uuid), description, completed FROM tasks'
-#         if completed is not None:
-#             query += ' WHERE completed = '
-#             if completed:
-#                 query += 'True'
-#             else:
-#                 query += 'False'
-
-#         with self.connection.cursor() as cursor:
-#             cursor.execute(query)
-#             db_results = cursor.fetchall()
-
-#         return {
-#             uuid_: Task(
-#                 description=field_description,
-#                 completed=bool(field_completed),
-#             #    user_id = field_user_id
-#             )
-#             # for uuid_, field_description, field_completed, field_user_id in db_results
-#             for uuid_, field_description, field_completed in db_results
-#         }
-
-#     def create_task(self, item: Task):
-#         uuid_ = uuid.uuid4()
-
-#         with self.connection.cursor() as cursor:
-#             cursor.execute(
-#                 # 'INSERT INTO tasks VALUES (UUID_TO_BIN(%s), %s, %s, %s)',
-#                 'INSERT INTO tasks VALUES (UUID_TO_BIN(%s), %s, %s)',
-#                 # (str(uuid_), item.description, item.completed, item.user_id),
-#                 (str(uuid_), item.description, item.completed),
-#             )
-#         self.connection.commit()
-
-#         return uuid_
-
-#     def read_task(self, uuid_: uuid.UUID):
-#         if not self.__task_exists(uuid_):
-#             raise KeyError()
-
-#         with self.connection.cursor() as cursor:
-#             # cursor.execute(
-#             #     '''
-#             #     SELECT description, completed, user_id
-#             #     FROM tasks
-#             #     WHERE uuid = UUID_TO_BIN(%s)
-#             #     ''',
-#             #     (str(uuid_), ),
-#             # )
-#             # result = cursor.fetchone()
-#             cursor.execute(
-#                 '''
-#                 SELECT description, completed
-#                 FROM tasks
-#                 WHERE uuid = UUID_TO_BIN(%s)
-#                 ''',
-#                 (str(uuid_), ),
-#             )
-#             result = cursor.fetchone()
-
-
-#         return Task(description=result[0], completed=bool(result[1]))
-
-#     def replace_task(self, uuid_, item):
-#         if not self.__task_exists(uuid_):
-#             raise KeyError()
-
-#         with self.connection.cursor() as cursor:
-#             # cursor.execute(
-#             #     '''
-#             #     UPDATE tasks SET description=%s, completed=%s, user_id = %s
-#             #     WHERE uuid=UUID_TO_BIN(%s)
-#             #     ''',
-#             #     (item.description, item.completed, item.user_id, str(uuid_)),
-#             # )
-#             cursor.execute(
-#                 '''
-#                 UPDATE tasks SET description=%s, completed=%s
-#                 WHERE uuid=UUID_TO_BIN(%s)
-#                 ''',
-#                 (item.description, item.completed, str(uuid_)),
-#             )
-#         self.connection.commit()
-
-#     def remove_task(self, uuid_):
-#         if not self.__task_exists(uuid_):
-#             raise KeyError()
-
-#         with self.connection.cursor() as cursor:
-#             cursor.execute(
-#                 'DELETE FROM tasks WHERE uuid=UUID_TO_BIN(%s)',
-#                 (str(uuid_), ),
-#             )
-#         self.connection.commit()
-
-#     def remove_all_tasks(self):
-#         with self.connection.cursor() as cursor:
-#             cursor.execute('DELETE FROM tasks')
-#         self.connection.commit()
-
-#     def __task_exists(self, uuid_: uuid.UUID):
-#         with self.connection.cursor() as cursor:
-#             cursor.execute(
-#                 '''
-#                 SELECT EXISTS(
-#                     SELECT 1 FROM tasks WHERE uuid=UUID_TO_BIN(%s)
-#                 )
-#                 ''',
-#                 (str(uuid_), ),
-#             )
-#             results = cursor.fetchone()
-#             found = bool(results[0])
-
-#         return found
-
-#     def read_users(self):
-#         query = 'SELECT BIN_TO_UUID(uuid), username FROM users'
-#         with self.connection.cursor() as cursor:
-#             cursor.execute(query)
-#             db_results = cursor.fetchall()
-
-#         return {
-#             uuid_: User(
-#                 username=field_username,
-#             )
-#             for uuid_, field_username in db_results
-#         }
-        
-#     def create_user(self, item: User):
-#             uuid_ = uuid.uuid4()
-
-#             with self.connection.cursor() as cursor:
-#                 cursor.execute(
-#                     'INSERT INTO users VALUES (UUID_TO_BIN(%s), %s)',
-#                     (str(uuid_), item.username),
-#                 )
-#             self.connection.commit()
-
-#             return uuid_
-
-#     def read_user(self, uuid_: uuid.UUID):
-#         if not self.__user_exists(uuid_):
-#             raise KeyError()
-
-#         with self.connection.cursor() as cursor:
-#             cursor.execute(
-#                 '''
-#                 SELECT username
-#                 FROM users
-#                 WHERE uuid = UUID_TO_BIN(%s)
-#                 ''',
-#                 (str(uuid_), ),
-#             )
-#             result = cursor.fetchone()
-
-#         return User(username=result[0])
-
-#     def replace_user(self, uuid_, item):
-#         if not self.__user_exists(uuid_):
-#             raise KeyError()
-
-#         with self.connection.cursor() as cursor:
-#             cursor.execute(
-#                 '''
-#                 UPDATE users SET username=%s
-#                 WHERE uuid=UUID_TO_BIN(%s)
-#                 ''',
-#                 (item.username, str(uuid_)),
-#             )
-#         self.connection.commit()
-
-#     def remove_user(self, uuid_):
-#         if not self.__user_exists(uuid_):
-#             raise KeyError()
-
-#         with self.connection.cursor() as cursor:
-#             cursor.execute(
-#                 'DELETE FROM users WHERE uuid=UUID_TO_BIN(%s)',
-#                 (str(uuid_), ),
-#             )
-#         self.connection.commit()
-
-
-#     def remove_all_users(self):
-#         with self.connection.cursor() as cursor:
-#             cursor.execute('DELETE FROM users')
-#         self.connection.commit()
-
-#     def __user_exists(self, uuid_: uuid.UUID):
-#         with self.connection.cursor() as cursor:
-#             cursor.execute(
-#                 '''
-#                 SELECT EXISTS(
-#                     SELECT 1 FROM users WHERE uuid=UUID_TO_BIN(%s)
-#                 )
-#                 ''',
-#                 (str(uuid_), ),
-#             )
-#             results = cursor.fetchone()
-#             found = bool(results[0])
-
-#         return found        
-
-# @lru_cache
-# def get_credentials(
-#         config_file_name: str = Depends(get_config_filename),
-#         secrets_file_name: str = Depends(get_app_secrets_filename),
-# ):
-#     with open(config_file_name, 'r') as file:
-#         config = json.load(file)
-#     with open(secrets_file_name, 'r') as file:
-#         secrets = json.load(file)
-#     return {
-#         'user': secrets['user'],
-#         'password': secrets['password'],
-#         'host': config['db_host'],
-#         'database': config['database'],
-#     }
-
-
-# def get_db(credentials: dict = Depends(get_credentials)):
-#     try:
-#         connection = conn.connect(**credentials)
-#         yield DBSession(connection)
-#     finally:
-#         connection.close()

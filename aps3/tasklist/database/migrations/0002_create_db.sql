@@ -1,4 +1,3 @@
-USE tasklist_test;
 DROP TABLE IF EXISTS tasks;
 CREATE TABLE tasks (
     uuid BINARY(16) PRIMARY KEY,
@@ -8,9 +7,9 @@ CREATE TABLE tasks (
 
 DROP TABLE IF EXISTS users;
 CREATE TABLE users (
-    uuid BINARY(16) PRIMARY KEY,
+    uuid BINARY(128) PRIMARY KEY,
     username NVARCHAR(1024)
 );
 
-ALTER TABLE tasks ADD user_id BINARY(16);
-ALTER TABLE tasks ADD FOREIGN KEY (user_id) REFERENCES users(uuid);
+ALTER TABLE tasks ADD user_id BINARY(128);
+ALTER TABLE tasks ADD FOREIGN KEY (user_id) REFERENCES users(uuid) ON DELETE CASCADE;

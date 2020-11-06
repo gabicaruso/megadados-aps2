@@ -5,8 +5,3 @@ CREATE TABLE tasks (
     completed BOOLEAN
 );
 
-DROP TABLE IF EXISTS users;
-CREATE TABLE users (
-    uuid BINARY(16) PRIMARY KEY,
-    username NVARCHAR(1024)
-);
