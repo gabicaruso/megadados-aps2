@@ -3,6 +3,8 @@ from typing import Optional
 
 from pydantic import BaseModel, Field  # pylint: disable=no-name-in-module
 
+import uuid
+
 # pylint: disable=too-few-public-methods
 class Task(BaseModel):
     description: Optional[str] = Field(
@@ -14,7 +16,7 @@ class Task(BaseModel):
         False,
         title='Shows whether the task was completed',
     )
-    user_id : Optional[str] = Field(
+    user_id :  Optional[str]  = Field(
         None,
         title='User ID',
     )
